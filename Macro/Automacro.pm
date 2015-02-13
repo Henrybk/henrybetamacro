@@ -5,7 +5,7 @@ use strict;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(releaseAM lockAM automacroCheck consoleCheckWrapper);
+our @EXPORT_OK = qw(releaseAM lockAM recheckAM automacroCheck consoleCheckWrapper);
 our @EXPORT = qw(checkLocalTime checkVar checkVarVar checkLoc checkPersonGuild checkLevel checkLevel checkClass
 	checkPercent checkStatus checkItem checkPerson checkCond checkCast checkGround checkSpellsID
 	checkEquip checkMsg checkMonster checkAggressives checkConsole checkMapChange);
@@ -271,6 +271,11 @@ sub checkStatus {
 #       getStorageAmount (Macro::Utils?)
 sub checkItem {
 	my ($where, $check) = @_;
+	$varStack{".lastItem"} = undef;
+	$varStack{".lastInvItem"} = undef;
+	$varStack{".lastCartItem"} = undef;
+	$varStack{".lastShopItem"} = undef;
+	$varStack{".lastStorItem"} = undef;
 	if ($check =~ /,/) {
 		my @checks = split(/\s*,\s*/, $check);
 		foreach my $c (@checks) {return 1 if checkItem($where, $c)}
@@ -290,14 +295,19 @@ sub checkItem {
 		else {return 0}
 	}
 	my $what;
-	if ($where eq 'inv')  {$what = getInventoryAmount($item)}
-	if ($where eq 'cart') {$what = getCartAmount($item)}
+	if ($where eq 'inv')  {$what = getInventoryAmount($item)} # TODO: why is this double checked?
+	if ($where eq 'cart') {$what = getCartAmount($item)} # TODO: why is this double checked?
 	if ($where eq 'inv')  {return 0 unless (time > $ai_v{'inventory_time'}); $what = getInventoryAmount($item);};
 	if ($where eq 'cart') {return 0 unless (time > $ai_v{'cart_time'}); $what = getCartAmount($item)};
-	if ($where eq 'shop') {return 0 unless $shopstarted; $what = getShopAmount($item)}
-	if ($where eq 'stor') {return 0 unless $::storage{opened}; $what = getStorageAmount($item)}
-
-	return cmpr($what, $cond, $amount)?1:0
+	if ($where eq 'shop') {return 0 unless (time > $ai_v{'cart_time'} && $shopstarted); $what = getShopAmount($item)}
+	if ($where eq 'stor') {return 0 unless $::storage{openedThisSession}; $what = getStorageAmount($item)}
+	my $return = cmpr($what, $cond, $amount)?1:0;
+	if ($return) {
+		$varStack{".last".ucfirst($where)."Item"} = $item;
+		$varStack{".lastItem"} = $item;
+	}
+	
+	return $return;
 }
 
 # checks for near person ##################################
@@ -627,6 +637,20 @@ sub checkMapChange {
 	return ($_[0] eq 'any' || $_[0] eq '*' || existsInList($_[0], $field->baseName))?1:0
 }
 
+sub checkAction  {
+	my ($args) = @_;
+	return 0 if !$questList;
+	if ($_[0] =~ /,/) {
+		my @action = split(/\s*,\s*/, $_[0]);
+		foreach my $e (@action) {return 1 if checkAction($e)}
+		return 0
+	}
+
+	my $modifier = ($args =~ s/^not\s//)?1:0;
+	my $result = existsInList($args, AI::action());
+	return $result xor $modifier;
+}
+
 # checks for eval
 sub checkEval {
 	return if $Settings::lockdown;
@@ -639,6 +663,69 @@ sub checkEval {
 	return eval $_[0];
 }
 
+sub checkConfigKey {
+	my ($args) = @_;
+	if ($_[0] =~ /,/) {
+		my @key = split(/\s*,\s*/, $_[0]);
+		foreach my $e (@key) {return 1 if checkConfigKey($e)}
+		return 0
+	}
+	if ($args =~ /^(\S+) not (.*)$/) {
+		if ($config{$1} ne $2 || ($config{$1} && $2 eq 'none')) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} elsif ($args =~ /^(\S+) (.*)$/) {		
+		if ($config{$1} eq $2 || (!$config{$1} && $2 eq 'none')) {
+			return 1;
+		} else {
+			return 0;
+		}
+	}
+	return 0;
+}
+
+
+sub checkQuest {
+	my ($args) = @_;
+	if ($_[0] =~ /,/) {
+		my @quest = split(/\s*,\s*/, $_[0]);
+		foreach my $e (@quest) {return 1 if checkQuest($e)}
+		return 0
+	}
+	
+	if ($args =~ /^(\d+) (active|inactive)$/) {
+		my ($questID, $statusCheck) = ($1, $2);
+		if ((($questList->{$questID} && $questList->{$questID}->{'active'})?1:0) eq {'active' => 1, 'inactive' => 0}->{$statusCheck}) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} elsif ($args =~ /^(\d+) killed (all|\d+) (.*)$/) {
+		my ($questID, $amountCheck, $monsterIDorName) = ($1, $2, $3);
+		if ($monsterIDorName !~ /^\d+$/) { $monsterIDorName = $monsters_lut{$monsterIDorName}; } # name to ID
+		if (
+			($amountCheck eq 'all' && $questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} >= $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'goal'}) 
+			|| ($questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} >= $amountCheck)
+		) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} elsif ($args =~ /^(\d+) time (passed|wait) ?(\d+)?$/) {
+		my ($questID, $check, $delay) = ($1, $2, $3);
+		# todo: prevent autovivification
+		my $questStatus = $questList->{$questID}->{'active'}?1:0;
+		my $passed = ($questStatus == 0 || time + $delay > $questList->{$questID}->{'time'})?1:0;
+		if (($check eq 'passed' && $passed) || ($check eq 'wait' && !$passed)) {
+			return 1;
+		} else {
+			return 0;
+		}
+	}
+	return 0;
+}
 
 # releases a locked automacro ##################
 sub releaseAM {
@@ -670,6 +757,21 @@ sub lockAM {
 	return 0
 }
 
+# releases a locked automacro ##################
+sub recheckAM {
+	if ($_[0] eq 'all') {
+		foreach (keys %automacro) {
+			undef $automacro{$_}->{rtime}
+		}
+		return 1
+	}
+	if (defined $automacro{$_[0]}) {
+		undef $automacro{$_[0]}->{rtime};
+		return 1
+	}
+	return 0
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -691,12 +793,20 @@ sub automacroCheck {
 			error "automacro $am: macro ".$automacro{$am}->{call}." not found.\n";
 			$automacro{$am}->{disabled} = 1; return
 		}
-
+		
+		if (defined $automacro{$am}->{recheck}) {
+			$automacro{$am}->{rtime} = 0 unless $automacro{$am}->{rtime};
+			my %tmptimer = (timeout => $automacro{$am}->{recheck}, time => $automacro{$am}->{rtime});
+			next CHKAM unless timeOut(\%tmptimer)
+		}
+		
 		if (defined $automacro{$am}->{timeout}) {
 			$automacro{$am}->{time} = 0 unless $automacro{$am}->{time};
 			my %tmptimer = (timeout => $automacro{$am}->{timeout}, time => $automacro{$am}->{time});
 			next CHKAM unless timeOut(\%tmptimer)
 		}
+		
+		$automacro{$am}->{rtime} = time if $automacro{$am}->{recheck};
 
 		if (defined $automacro{$am}->{hook}) {
 			next CHKAM unless $trigger eq $automacro{$am}->{hook};
@@ -761,14 +871,17 @@ sub automacroCheck {
 
 		next CHKAM if (defined $automacro{$am}->{map}    && $automacro{$am}->{map} ne $field->baseName);
 		next CHKAM if (defined $automacro{$am}->{class}  && !checkClass($automacro{$am}->{class}));
-		next CHKAM if (defined $automacro{$am}->{eval} && !checkEval($automacro{$am}->{eval}));
 		next CHKAM if (defined $automacro{$am}->{whenGround} && !checkGround($automacro{$am}->{whenGround}));
 		next CHKAM if (defined $automacro{$am}->{notMonster} && !checkMonster($automacro{$am}->{notMonster}, 1));
-
+		
+		foreach my $i (@{$automacro{$am}->{eval}})		 {next CHKAM unless checkEval($i)}
+		foreach my $i (@{$automacro{$am}->{action}})	 {next CHKAM unless checkAction($i)}
 		foreach my $i (@{$automacro{$am}->{monster}})    {next CHKAM unless checkMonster($i)}
 		foreach my $i (@{$automacro{$am}->{aggressives}}){next CHKAM unless checkAggressives($i)}
 		foreach my $i (@{$automacro{$am}->{location}})   {next CHKAM unless checkLoc($i)}
 		foreach my $i (@{$automacro{$am}->{localtime}})  {next CHKAM unless checkLocalTime($i, "")}
+		foreach my $i (@{$automacro{$am}->{config}}) 	 {next CHKAM unless checkConfigKey($i)}
+		foreach my $i (@{$automacro{$am}->{quest}}) 	 {next CHKAM unless checkQuest($i)}
 		foreach my $i (@{$automacro{$am}->{var}})        {next CHKAM unless checkVar($i, "")}
 		foreach my $i (@{$automacro{$am}->{varvar}})     {next CHKAM unless checkVar($i, "varvar")}
 		foreach my $i (@{$automacro{$am}->{base}})       {next CHKAM unless checkLevel($i, "lv")}

@@ -40,12 +40,14 @@ our %amSingle = (
 	'priority' => 1,     # option: automacro priority
 	'exclusive' => 1,    # option: is macro interruptible
 	'playerguild' => 1,  # check: player guilds
-	'eval' => 1,         # check : eval
 	'whenGround' => 1,   # check : when ground statuses
-	'areaSpell' => 1     # check : area spell
+	'areaSpell' => 1,     # check : area spell,
+	'recheck' => 1		 # check : recheck timeout
+	
 );
 
 our %amMulti = (
+	'eval' => 1,         # check : eval
 	'set' => 1,          # set: variable
 	'save' => 1,         # setting: save hook arguments
 	'monster' => 1,      # check: monster on screen
@@ -70,7 +72,10 @@ our %amMulti = (
 	'storage' => 1,      # check: item amount in storage
 	'shop' => 1,         # check: item amount in shop
 	'cart' => 1,         # check: item amount in cart
-	'localtime' => 1     # check: localtime
+	'localtime' => 1,    # check: localtime
+	'config' => 1,    	 # check: config key
+	'quest' => 1,     	 # check: player quests
+	'action' => 1     	 # check: action
 );
 
 our $macroKeywords =
