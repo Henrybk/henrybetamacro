@@ -707,7 +707,7 @@ sub checkQuest {
 		if ($monsterIDorName !~ /^\d+$/) { $monsterIDorName = $monsters_lut{$monsterIDorName}; } # name to ID
 		if (
 			($amountCheck eq 'all' && $questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} >= $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'goal'}) 
-			|| ($questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} >= $amountCheck)
+			|| ($questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} == $amountCheck)
 		) {
 			return 1;
 		} else {
