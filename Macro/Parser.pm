@@ -164,7 +164,57 @@ sub parseMacroFile {
 				if ($amSingle{$key}) {
 					$automacro{$block{name}}->{$key} = $value;
 				} elsif ($amMulti{$key}) {
-					push(@{$automacro{$block{name}}->{$key}}, $value);
+					if ($key eq "quest") {
+						unless ($value =~ /^\d+/) {
+							my @quest;
+							if ($value =~ /,/) {
+								@quest = split(/\s*,\s+/, $value);
+							} else {
+								@quest = ($value);
+							}
+							foreach my $condition (@quest) {
+								my @QuestID;
+								my $Type;
+								if ($condition =~ /(\d+)$/) {
+									@QuestID = ($1);
+									$condition =~ s/\s+\d+$//;
+									$Type = 0;
+								} elsif ($condition =~ /\((\d+,.+)\)$/) {
+									@QuestID = split(/,/, $1);
+									$condition =~ s/\s+\((\d+,.+)\)$//;
+									$Type = 0;
+								} elsif ($condition =~ /\((\d+)\.\.(\d+)\)$/) {
+									@QuestID = ($1..$2);
+									$condition =~ s/\s+\(\d+\.\.\d+\)$//;
+									$Type = 0;
+								} elsif ($condition =~ /\((\d+\|\|.+)\)$/) {
+									@QuestID = split(/\|\|/,$1);
+									$condition =~ s/\s+\(\d+\|\|.+\)$//;
+									$Type = 1;
+								} elsif ($condition =~ /\((\d+)\.\|\|\.(\d+)\)$/) {
+									@QuestID = ($1..$2);
+									$condition =~ s/\s+\(\d+\.\|\|\.\d+\)$//;
+									$Type = 1;
+								}
+								if (!$Type) {
+									foreach my $part (@QuestID) {
+										$part = $part." ".$condition;
+										push(@{$automacro{$block{name}}->{$key}}, $part);
+									}
+								} else {
+									my @uniline;
+									foreach my $part (@QuestID) {
+										my $ThisLine = $part." ".$condition;
+										push(@uniline, $ThisLine);
+									}
+									my $Final = join(', ', @uniline);
+									push(@{$automacro{$block{name}}->{$key}}, $Final);
+								}
+							}
+						}
+					} else {
+						push(@{$automacro{$block{name}}->{$key}}, $value);
+					}
 				} else {
 					warning "$file: ignoring '$_' in line $. (munch, munch, unknown automacro keyword)\n"
 				}
