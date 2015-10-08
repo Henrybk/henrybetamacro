@@ -122,15 +122,53 @@ sub parseMacroFile {
 					warning "$file: ignoring '$_' in line $. (munch, munch, not a pair)\n";
 					next
 				}
+				if ($key =~ /(player|monster|notMonster)/) {
+					$key = 'actor';
+					if ($1 eq "player") {
+						my ($who, $dist) = $value =~ /^(["\/].*?["\/]\w*)\s*,?\s*(.*)/;
+						if ($dist > 0) {
+							$value = "player $who $dist";
+						} else {
+							$value = "player $who";
+						}
+					} else {
+						my $not;
+						if ($value =~ /^not\s+/) {
+							$value =~ s/^not\s+//;
+							$not = "not ";
+						} elsif ($1 eq "notMonster") {
+							$not = "not ";
+						}	
+						my ($monsterList, $cond, $mondist);
+						if ($value =~ /^\s*(.*),?\s+([<>=!~]+)\s+(\d+|\d+\s*.{2}\s*\d+)\s*$/) {
+							($monsterList, $cond, $mondist) = ($1, $2, $3);
+						} else {
+							$monsterList = $value;
+						}
+						my @monsterList2 = split(/\s*,\s*/,$monsterList);
+						my $newMonsterList = join ("|",@monsterList2);
+						if ($cond && $mondist) {
+							$value = "monster ".$not."/^($newMonsterList)".'$'."/ $cond $mondist";
+						} elsif ($mondist) {
+							$value = "monster ".$not."/^($newMonsterList)".'$'."/ $mondist";
+						} else {
+							$value = "monster ".$not."/^($newMonsterList)".'$'."/";
+						}
+					}
+				} elsif ($key =~ /(pm|pub|party|guild|system)/) {
+					my $messageType;
+					if ($1 eq 'system') { $messageType = 'sys'; } else { $messageType = $1; }
+					$key = 'message';
+					$value = "$messageType $value";
+				}
 				if ($amSingle{$key}) {
-					$automacro{$block{name}}->{$key} = $value
+					$automacro{$block{name}}->{$key} = $value;
 				} elsif ($amMulti{$key}) {
-					push(@{$automacro{$block{name}}->{$key}}, $value)
+					push(@{$automacro{$block{name}}->{$key}}, $value);
 				} else {
 					warning "$file: ignoring '$_' in line $. (munch, munch, unknown automacro keyword)\n"
 				}
 			}
-			
 			next
 		}
 		

@@ -7,8 +7,8 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(releaseAM lockAM recheckAM automacroCheck consoleCheckWrapper);
 our @EXPORT = qw(checkLocalTime checkVar checkVarVar checkLoc checkPersonGuild checkLevel checkLevel checkClass
-	checkPercent checkStatus checkItem checkPerson checkCond checkCast checkGround checkSpellsID
-	checkEquip checkMsg checkMonster checkAggressives checkConsole checkMapChange);
+	checkPercent checkStatus checkItem checkCond checkCast checkGround checkSpellsID
+	checkEquip checkAggressives checkConsole checkMapChange checkMessage checkActor);
 	
 use Misc qw(whenGroundStatus getSpellName getActorName);
 use Utils;
@@ -310,27 +310,6 @@ sub checkItem {
 	return $return;
 }
 
-# checks for near person ##################################
-sub checkPerson {
-	my ($who, $dist) = $_[0] =~ /^(["\/].*?["\/]\w*)\s*,?\s*(.*)/;
-
-	foreach my $player (@{$playersList->getItems()}) {
-		next unless match($player->name, $who);
-		if ($dist > 0 && distance($char->{pos_to}, $player->{pos_to}) >= $dist) {
-			return 0;
-		}
-		my $val = sprintf("%d %d %s", $player->{pos_to}{x}, $player->{pos_to}{y}, $field->baseName);
-		$varStack{".lastPlayerName"} = $player->name;
-		$varStack{".lastPlayerPos"} = $val;
-		$varStack{".lastPlayerLevel"} = $player->{lv};
-		$varStack{".lastPlayerJob"} = $player->job;
-		$varStack{".lastPlayerAccountId"} = $player->{nameID};
-		$varStack{".lastPlayerBinId"} = $player->{binID};
-		return 1
-	}
-	return 0
-}
-
 # checks arg1 for condition in arg3 #######################
 # uses: cmpr (Macro::Utils)
 sub checkCond {
@@ -450,47 +429,6 @@ sub checkCast {
 	else {return 0}
 }
 
-# checks for public, private, party or guild message ######
-# uses calcPosition, distance (Utils?)
-sub checkMsg {
-	my ($var, $tmp, $arg) = @_;
-	my $msg;
-	if ($var eq '.lastpub') {
-		($msg, my $distance) = $tmp =~ /^([\/"].*?[\/"]\w*)\s*,?\s*(\d*)/;
-		if ($distance ne '') {
-			my $mypos = calcPosition($char);
-			my $pos = calcPosition($::players{$arg->{pubID}});
-			return 0 unless distance($mypos, $pos) <= $distance
-		}
-	} elsif ($var eq '.lastpm') {
-		($msg, my $allowed) = $tmp =~ /^([\/"].*?[\/"]\w*)\s*,?\s*(.*)/;
-		my $auth;
-		if (!$allowed) {
-			$auth = 1
-		} else {
-			my @tfld = split(/,/, $allowed);
-			for (my $i = 0; $i < @tfld; $i++) {
-				next unless defined $tfld[$i];
-				$tfld[$i] =~ s/(?:^ +| +$)//g;
-				if ($arg->{privMsgUser} eq $tfld[$i]) {$auth = 1; last}
-			}
-		}
-		return 0 unless $auth
-	} elsif ($var eq '.lastsys') {
-		($msg) = $tmp =~ /^([\/"].*?[\/"]\w*)\s*,?\s*(.*)/;
-		chomp($msg);
-	} else {
-		$msg = $tmp
-	}	
-	$arg->{Msg} =~ s/[\r\n]*$//g;
-	if (match($arg->{Msg},$msg)){
-		$varStack{$var} = $arg->{MsgUser};
-		$varStack{$var."Msg"} = $arg->{Msg};
-		return 1
-	}
-	return 0
-}
-
 # checks for area spell
 sub checkSpellsID {
 	my ($line, $args) = @_;
@@ -520,83 +458,6 @@ sub checkSpellsID {
 			return cmpr($dist1, $cond, $dist)
 		}
 	}
-	return 0
-}
-
-# checks for monster ...
-sub checkMonster {
-	my $line = $_[0];
-	my $not = $_[1];
-	my ($mercenary, $use, $monsterList, $cond);
-	my $mondist = $config{clientSight} || 20;
-
-	if ($line =~ /^\s*(.*),?\s+([<>=!~]+)\s+(\d+|\d+\s*.{2}\s*\d+)\s*$/) {
-		($monsterList, $cond, $mondist) = ($1, $2, $3)
-	} else {
-		$monsterList = $line;
-		$cond = "<="
-	}
-
-	if (!$not && $monsterList =~ /^(not|mercenary)\s+(.*)\s*$/) {
-		if ($1 eq "not") {$not = 1; $monsterList = $2}
-		else {$mercenary = 1; $use = 1; $monsterList = $2}
-	}
-
-	foreach (@monstersID) {
-		next unless defined $_;
-		if ($mercenary) {
-			#Whose the mercenary's master,
-			#update later ;p
-			my $mypos = calcPosition($char);
-			my $pos = calcPosition($monsters{$_});
-			my $dist = sprintf("%.1f",distance($pos, $mypos));
-			if (existsInList($monsterList, $monsters{$_}->{name}) && $dist < 3) {$use = 0; last}
-		}
-		elsif ($not) {
-			next if existsInList($monsterList, $monsters{$_}->{name});
-			my $mypos = calcPosition($char);
-			my $pos = calcPosition($monsters{$_});
-			my $dist = sprintf("%.1f",distance($pos, $mypos));
-			my $val = sprintf("%d %d %s", $pos->{x}, $pos->{y}, $field->baseName);
-			$varStack{".lastMonster"} = $monsters{$_}->{name};
-			$varStack{".lastMonsterPos"} = $val;
-			$varStack{".lastMonsterDist"} = $dist;
-			$varStack{".lastMonsterID"} = $monsters{$_}->{binID};
-			$varStack{".lastMonsterBinID"} = $monsters{$_}->{binType};
-			return cmpr($dist, $cond, $mondist)
-		} else {
-			if (existsInList($monsterList, $monsters{$_}->{name})) {
-				my $counter;
-				my $mypos = calcPosition($char);
-				my $pos = calcPosition($monsters{$_});
-				my $dist = sprintf("%.1f", distance($mypos, $pos));
-				my $val = sprintf("%d %d %s", $pos->{x}, $pos->{y}, $field->baseName);
-				$varStack{".lastMonster"} = $monsters{$_}->{name};
-				$varStack{".lastMonsterPos"} = $val;
-				$varStack{".lastMonsterDist"} = $dist;
-				$varStack{".lastMonsterID"} = $monsters{$_}->{binID};
-				$varStack{".lastMonsterBinID"} = $monsters{$_}->{binType};
-				for (my $i = 0; $i < @::monstersID; $i++) {
-					next if $::monstersID[$i] eq "";
-					my $monster = Actor::get($::monstersID[$i]);
-					if ($monster->name eq $monsters{$_}->{name}) {
-						if ($monster->{binID} eq $monsters{$_}->{binID}) {
-							$counter++;
-							next
-						} else {
-							my $monsToMonDist = sprintf("%.1f",distance($pos, $monster->{pos_to}));
-							$counter++ if $monsToMonDist < 12;
-							next
-						}
-					}
-					next
-				}
-				$varStack{".lastMonsterCount"} = $counter;
-				return cmpr($dist, $cond, $mondist)
-			}
-		}
-	}
-	return 1 if ($use);
 	return 0
 }
 
@@ -772,6 +633,114 @@ sub recheckAM {
 	return 0
 }
 
+# checks for near actor ##################################
+sub checkActor {
+	my ($actorType, $not, $who, $distCond, $dist) = $_[0] =~ /^(\w+)\s+(not|none|except)?\s*(["\/].*?["\/]\w*)?\s*,?\s*([<>=!~]+)?\s*(\d*)/;
+	$distCond = "<=" if (!$distCond && $dist > 0);
+	my %actorTypes = (
+			npc => $npcsList->getItems(),
+			player => $playersList->getItems(),
+			monster => $monstersList->getItems(),
+			pet => $petsList->getItems()
+		);
+	return 0 if (!exists($actorTypes{$actorType}) || ($not ne 'none' && !$who));
+	if ($who =~ /(?<!\\)\$\w+/) {
+		my $valu;
+		my @val = $who =~ /(?<!\\)(\$\w+)/g;
+		foreach (@val) {
+			$_ =~ s/^\$//;
+			return 0 if (!$varStack{$_});
+			$who =~ s/\$$_/$varStack{$_}/;
+		}
+	}
+	foreach my $actor (@{$actorTypes{$actorType}}) {
+		next if ($dist && !cmpr(distance($char->{pos_to}, $actor->{pos_to}), $distCond, $dist));
+		if ((!$who) || (!match($actor->name, $who) && $not eq 'except') || (match($actor->name, $who) && $not eq 'none')) {
+			return 0;
+		} elsif ((!match($actor->name, $who) && !$not) || (match($actor->name, $who) && $not eq 'not')) {
+			next;
+		}
+		next if ($not eq 'except' || $not eq 'none');
+		my $val = sprintf("%d %d %s", $actor->{pos_to}{x}, $actor->{pos_to}{y}, $field->baseName);
+		if ($actorType eq 'npc') {
+			$varStack{".lastNpcName"} = $actor->name;
+			$varStack{".lastNpcPos"} = $val;
+			$varStack{".lastNpcIndex"} = $actor->{binID};
+			$varStack{".lastNPcID"} = $actor->{nameID};
+		} elsif ($actorType eq 'player') {
+			$varStack{".lastPlayerName"} = $actor->name;
+			$varStack{".lastPlayerPos"} = $val;
+			$varStack{".lastPlayerLevel"} = $actor->{lv};
+			$varStack{".lastPlayerJob"} = $actor->job;
+			$varStack{".lastPlayerAccountId"} = $actor->{nameID};
+			$varStack{".lastPlayerBinId"} = $actor->{binID};
+		} elsif ($actorType eq 'monster') {
+			$varStack{".lastMonster"} = $actor->{name};
+			$varStack{".lastMonsterPos"} = $val;
+			$varStack{".lastMonsterDist"} = $dist;
+			$varStack{".lastMonsterID"} = $actor->{binID};
+			$varStack{".lastMonsterBinID"} = $actor->{binType};
+		} elsif ($actorType eq 'pet') {
+			$varStack{".lastPetName"} = $actor->name;
+			$varStack{".lastPetPos"} = $val;
+			$varStack{".lastPetIndex"} = $actor->{binID};
+			$varStack{".lastPetType"} = $actor->{type};
+		}
+		return 1
+	}
+	return 1 if ($not eq 'none' || $not eq 'except');
+	return 0
+}
+
+#cheks messages
+sub checkMessage {
+	my ($condition, $args) = @_;
+	my ($sourceType, $notMsg, $MsgCondition, $notActor, $actorCondition, $distCond, $dist) = $condition =~ /^(\w+)\s+(not)?\s*([\/"].*?[\/"]\w*)\s*,?\s*(not)?\s*([\/"].*?[\/"]\w*)?\s*,?\s*([<>=!~]+)?\s*(\d*)/;
+	my ($message, $actor);
+	if ($sourceType eq 'npc' || $sourceType eq 'self') { $message = $args->{msg}; } else { $message = $args->{Msg}; }
+	if ($sourceType eq 'pm' || $sourceType eq 'pub' || $sourceType eq 'party' || $sourceType eq 'guild') { $actor = $args->{MsgUser}; } elsif ($sourceType eq 'npc') { $actor = $args->{name}; } elsif ($sourceType eq 'self') { $actor = $args->{user}; }
+	########
+	my @val;
+	if ($MsgCondition =~ /(?<!\\)\$\w+/) {
+		@val = $MsgCondition =~ /(?<!\\)(\$\w+)/g;
+		foreach (@val) {
+			$_ =~ s/^\$//;
+			return 0 if (!$varStack{$_});
+			$MsgCondition =~ s/\$$_/$varStack{$_}/;
+		}
+		undef @val;
+	}
+	if ($actorCondition && $actorCondition =~ /(?<!\\)\$\w+/) {
+		@val = $actorCondition =~ /(?<!\\)(\$\w+)/g;
+		foreach (@val) {
+			$_ =~ s/^\$//;
+			return 0 if (!$varStack{$_});
+			$actorCondition =~ s/\$$_/$varStack{$_}/;
+		}
+		undef @val;
+	}
+	########
+	return 0 if ((!match($message, $MsgCondition) xor $notMsg) || ($actorCondition && (!match($actor, $actorCondition) xor $notActor)));
+	if ($dist) {
+		my %lol;
+		my $counter;
+		foreach (@{$playersList->getItems()}) {
+			$lol{$_->{name}} = $counter;
+		} continue {
+			$counter++;
+		}
+		if (exists($lol{$actor})) {
+			$distCond = "<=" if (!$distCond);
+			return 0 if (!cmpr(distance($char->{pos_to}, @{$playersList->getItems()}[$lol{$actor}]->{pos_to}), $distCond, $dist));
+		} else {
+			return 0;
+		}
+	}
+	$varStack{".last".$sourceType."Msg"} = $message;
+	$varStack{".last".$sourceType} = $actor if ($actor);
+	return 1;
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -835,25 +804,17 @@ sub automacroCheck {
 			if ($trigger =~ /^(?:is_casting|packet_skilluse)$/) {
 			next CHKAM unless checkCast($automacro{$am}->{spell}, $args)
 			} else {next CHKAM}
-		} elsif (defined $automacro{$am}->{pm}) {
-			if ($trigger eq 'packet_privMsg') {
-			next CHKAM unless checkMsg(".lastpm", $automacro{$am}->{pm}, $args)
-			} else {next CHKAM}
-		} elsif (defined $automacro{$am}->{pubm}) {
-			if ($trigger eq 'packet_pubMsg') {
-			next CHKAM unless checkMsg(".lastpub", $automacro{$am}->{pubm}, $args)
-			} else {next CHKAM}
-		} elsif (defined $automacro{$am}->{system}) {
-			if ($trigger eq 'packet_sysMsg') {
-			next CHKAM unless checkMsg(".lastsys", $automacro{$am}->{system}, $args)
-			} else {next CHKAM}
-		} elsif (defined $automacro{$am}->{party}) {
-			if ($trigger eq 'packet_partyMsg') {
-			next CHKAM unless checkMsg(".lastparty", $automacro{$am}->{party}, $args)
-			} else {next CHKAM}
-		} elsif (defined $automacro{$am}->{guild}) {
-			if ($trigger eq 'packet_guildMsg') {
-			next CHKAM unless checkMsg(".lastguild", $automacro{$am}->{guild}, $args)
+		} elsif (defined $automacro{$am}->{message}) {
+			if (($trigger eq 'npc_talk' && $automacro{$am}->{message} =~ /^npc/) ||
+				($trigger eq 'packet_privMsg' && $automacro{$am}->{message} =~ /^pm/) ||
+				($trigger eq 'packet_pubMsg' && $automacro{$am}->{message} =~ /^pub/) ||
+				($trigger eq 'packet_sysMsg' && $automacro{$am}->{message} =~ /^sys/) ||
+				($trigger eq 'packet_partyMsg' && $automacro{$am}->{message} =~ /^party/) ||
+				($trigger eq 'packet_selfChat' && $automacro{$am}->{message} =~ /^self/) ||
+				($trigger eq 'packet_localBroadcast' && $automacro{$am}->{message} =~ /^local/) ||
+				($trigger eq 'packet_guildMsg' && $automacro{$am}->{message} =~ /^guild/)
+				){
+					next CHKAM unless checkMessage($automacro{$am}->{message}, $args)
 			} else {next CHKAM}
 		} elsif (defined $automacro{$am}->{mapchange}) {
 			if ($trigger eq 'packet_mapChange') {
@@ -872,11 +833,9 @@ sub automacroCheck {
 		next CHKAM if (defined $automacro{$am}->{map}    && $automacro{$am}->{map} ne $field->baseName);
 		next CHKAM if (defined $automacro{$am}->{class}  && !checkClass($automacro{$am}->{class}));
 		next CHKAM if (defined $automacro{$am}->{whenGround} && !checkGround($automacro{$am}->{whenGround}));
-		next CHKAM if (defined $automacro{$am}->{notMonster} && !checkMonster($automacro{$am}->{notMonster}, 1));
 		
 		foreach my $i (@{$automacro{$am}->{eval}})		 {next CHKAM unless checkEval($i)}
 		foreach my $i (@{$automacro{$am}->{action}})	 {next CHKAM unless checkAction($i)}
-		foreach my $i (@{$automacro{$am}->{monster}})    {next CHKAM unless checkMonster($i)}
 		foreach my $i (@{$automacro{$am}->{aggressives}}){next CHKAM unless checkAggressives($i)}
 		foreach my $i (@{$automacro{$am}->{location}})   {next CHKAM unless checkLoc($i)}
 		foreach my $i (@{$automacro{$am}->{localtime}})  {next CHKAM unless checkLocalTime($i, "")}
@@ -894,9 +853,9 @@ sub automacroCheck {
 		foreach my $i (@{$automacro{$am}->{soldout}})    {next CHKAM unless checkCond(getSoldOut(), $i)}
 		foreach my $i (@{$automacro{$am}->{zeny}})       {next CHKAM unless checkCond($char->{zeny}, $i)}
 		foreach my $i (@{$automacro{$am}->{cash}})       {next CHKAM unless checkCond($cashShop{points}->{cash}?$cashShop{points}->{cash}:0, $i)}
-		foreach my $i (@{$automacro{$am}->{player}})     {next CHKAM unless checkPerson($i)}
 		foreach my $i (@{$automacro{$am}->{equipped}})   {next CHKAM unless checkEquip($i)}
 		foreach my $i (@{$automacro{$am}->{status}})     {next CHKAM unless checkStatus($i)}
+		foreach my $i (@{$automacro{$am}->{actor}})      {next CHKAM unless checkActor($i)}
 		foreach my $i (@{$automacro{$am}->{inventory}})  {next CHKAM unless checkItem("inv", $i)}
 		foreach my $i (@{$automacro{$am}->{storage}})    {next CHKAM unless checkItem("stor", $i)}
 		foreach my $i (@{$automacro{$am}->{shop}})       {next CHKAM unless checkItem("shop", $i)}
