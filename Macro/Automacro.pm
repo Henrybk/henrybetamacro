@@ -753,6 +753,14 @@ sub checkTargetDied {
 	return 1;
 }
 
+sub checkCity {
+	if (($_[0] && $field->isCity) || (!$_[0] && !$field->isCity)) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -849,6 +857,7 @@ sub automacroCheck {
 		next CHKAM if (defined $automacro{$am}->{map}    && $automacro{$am}->{map} ne $field->baseName);
 		next CHKAM if (defined $automacro{$am}->{class}  && !checkClass($automacro{$am}->{class}));
 		next CHKAM if (defined $automacro{$am}->{whenGround} && !checkGround($automacro{$am}->{whenGround}));
+		next CHKAM if (defined $automacro{$am}->{incity} && !checkCity($automacro{$am}->{incity}));
 		
 		foreach my $i (@{$automacro{$am}->{eval}})		 {next CHKAM unless checkEval($i)}
 		foreach my $i (@{$automacro{$am}->{action}})	 {next CHKAM unless checkAction($i)}

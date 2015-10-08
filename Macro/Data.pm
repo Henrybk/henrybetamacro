@@ -38,8 +38,8 @@ our %amSingle = (
 	'whenGround' => 1,   # check : when ground statuses
 	'areaSpell' => 1,    # check : area spell,
 	'targetdied' => 1,   # check : killed target
-	'recheck' => 1		 # check : recheck timeout
-	
+	'recheck' => 1,		 # check : recheck timeout
+	'incity' => 1        # check : if map is a city
 );
 
 our %amMulti = (
