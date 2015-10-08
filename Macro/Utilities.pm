@@ -230,6 +230,8 @@ sub refreshGlobal {
 	$varStack{".weight"} = $char->{weight};
 	$varStack{".maxweight"} = $char->{weight_max};
 	$varStack{".cartweight"} = $cart{weight};
+	$varStack{".cartmaxweight"} = $cart{weight_max};
+	$varStack{".cartitems"} = $cart{items};
 	$varStack{'.status'} = (join ',',
 		('muted')x!!$char->{muted},
 		('dead')x!!$char->{dead},
