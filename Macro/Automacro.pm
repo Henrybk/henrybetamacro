@@ -288,6 +288,10 @@ sub checkItem {
 		if (exists $varStack{$var}) {$item = $varStack{$var}}
 		else {return 0}
 	}
+	if ($item =~ /^(\d+)$/) {
+		$item = $char->inventory->getByNameID($1);
+		$item = $item->{name};
+	}
 	if ($amount =~ /^\$/) {
 		my ($var1) = $amount =~ /^\$([a-zA-Z][a-zA-Z\d]*)\s*/;
 		return 0 unless defined $var1;
