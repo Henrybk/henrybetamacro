@@ -549,43 +549,30 @@ sub checkConfigKey {
 
 
 sub checkQuest {
-	my ($args) = @_;
-	if ($_[0] =~ /,/) {
-		my @quest = split(/\s*,\s*/, $_[0]);
-		foreach my $e (@quest) {return 1 if checkQuest($e)}
-		return 0
-	}
-	
-	if ($args =~ /^(\d+) (active|inactive)$/) {
-		my ($questID, $statusCheck) = ($1, $2);
-		if ((($questList->{$questID} && $questList->{$questID}->{'active'})?1:0) eq {'active' => 1, 'inactive' => 0}->{$statusCheck}) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elsif ($args =~ /^(\d+) killed (all|\d+) (.*)$/) {
-		my ($questID, $amountCheck, $monsterIDorName) = ($1, $2, $3);
-		if ($monsterIDorName !~ /^\d+$/) { $monsterIDorName = $monsters_lut{$monsterIDorName}; } # name to ID
-		if (
-			($amountCheck eq 'all' && $questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} >= $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'goal'}) 
-			|| ($questList->{$questID} && $questList->{$questID}->{'missions'}->{$monsterIDorName}->{'count'} == $amountCheck)
-		) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elsif ($args =~ /^(\d+) time (passed|wait) ?(\d+)?$/) {
-		my ($questID, $check, $delay) = ($1, $2, $3);
-		# todo: prevent autovivification
-		my $questStatus = $questList->{$questID}->{'active'}?1:0;
-		my $passed = ($questStatus == 0 || time + $delay > $questList->{$questID}->{'time'})?1:0;
-		if (($check eq 'passed' && $passed) || ($check eq 'wait' && !$passed)) {
-			return 1;
-		} else {
-			return 0;
-		}
-	}
-	return 0;
+    my ($args) = @_;
+    if ($_[0] =~ /,/) {
+        my @key = split(/\s*,\s*/, $_[0]);
+        foreach my $e (@key) {return 1 if checkQuest($e)}
+        return 0
+    }
+    my $questID;
+    if ($args =~ /^(\d+)/) { $questID = $1; } else { return 0; }
+    $args =~ s/^\d+\s+//;
+    if ($args eq "active" || $args eq "inactive") {
+        my $WantedStatus = ($args eq "active")?1:0;
+        return 1 if (($::questList->{$questID}->{'active'} == 1 && $WantedStatus == 1) || ($::questList->{$questID}->{'active'} == 0 && $WantedStatus == 0) || (!$::questList->{$questID}->{'active'} && $WantedStatus == 0));
+    } elsif ($args eq "killed") {
+        my @MobIds = keys %{($questList->{$questID})->{missions}};
+        return 0 if ($::questList->{$questID}->{'active'} != 1);
+        foreach my $MobId (@MobIds) {
+            return 0 unless ($::questList->{$questID}->{missions}->{$MobId}->{count} == $::questList->{$questID}->{missions}->{$MobId}->{goal});
+        }
+        return 1;
+    } elsif ($args eq "time over" || $args eq "time inside") {
+        my $WantedTime = ($args eq "time inside")?1:0;
+        return 1 if ($::questList->{$questID}->{'active'} == 1 && (($::questList->{$questID}->{'time'} > time && $WantedTime == 1) || ($::questList->{$questID}->{'time'} < time && $WantedTime == 0)));
+    }
+    return 0;
 }
 
 # releases a locked automacro ##################
