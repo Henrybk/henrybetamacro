@@ -741,6 +741,31 @@ sub checkMessage {
 	return 1;
 }
 
+#cheks dead targets
+sub checkTargetDied {
+	my ($cond, $monster) = @_;
+	my ($key, $value) = $cond =~ /(.+)\s+(.+)/;
+	if ($key eq 'name') {
+		return 0 if ($monster->{monster}->{name} ne $value);
+	} elsif ($key eq 'name_given') {
+		return 0 if ($monster->{monster}->{name_given} ne $value);
+	} elsif ($key eq 'nameID') {
+		return 0 if ($monster->{monster}->{nameID} != $value);
+	} elsif ($key eq 'dmgFromYou') {
+		return 0 if (!inRange($monster->{monster}->{dmgFromYou}, $value));
+	} elsif ($key eq 'numAtkFromYou') {
+		return 0 if (!inRange($monster->{monster}->{numAtkFromYou}, $value));
+	} elsif ($key eq 'moblv') {
+		return 0 if ($monster->{monster}->{lv} != $value);
+	} else {
+		return 0;
+	}
+	$varStack{".lastTargetName"} = $monster->{monster}->{name};
+	$varStack{".lastTargetGivenName"} = $monster->{monster}->{name_given};
+	$varStack{".lastTargetID"} = $monster->{monster}->{nameID};
+	return 1;
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -827,6 +852,10 @@ sub automacroCheck {
 		} elsif (defined $automacro{$am}->{areaSpell}) {
 			if ($trigger eq 'packet_areaSpell') {
 			next CHKAM unless checkSpellsID($automacro{$am}->{areaSpell}, $args)
+			} else {next CHKAM}
+		} elsif (defined $automacro{$am}->{targetdied}) {
+			if ($trigger eq 'target_died') {
+			next CHKAM unless checkTargetDied($automacro{$am}->{targetdied}, $args)
 			} else {next CHKAM}
 		}
 

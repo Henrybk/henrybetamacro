@@ -36,7 +36,8 @@ our %amSingle = (
 	'exclusive' => 1,    # option: is macro interruptible
 	'playerguild' => 1,  # check: player guilds
 	'whenGround' => 1,   # check : when ground statuses
-	'areaSpell' => 1,     # check : area spell,
+	'areaSpell' => 1,    # check : area spell,
+	'targetdied' => 1,   # check : killed target
 	'recheck' => 1		 # check : recheck timeout
 	
 );
