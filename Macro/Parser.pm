@@ -211,6 +211,8 @@ sub parseMacroFile {
 									push(@{$automacro{$block{name}}->{$key}}, $Final);
 								}
 							}
+						} else {
+							push(@{$automacro{$block{name}}->{$key}}, $value);
 						}
 					} else {
 						push(@{$automacro{$block{name}}->{$key}}, $value);
