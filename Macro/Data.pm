@@ -39,7 +39,8 @@ our %amSingle = (
 	'areaSpell' => 1,    # check : area spell,
 	'targetdied' => 1,   # check : killed target
 	'recheck' => 1,		 # check : recheck timeout
-	'incity' => 1        # check : if map is a city
+	'incity' => 1,       # check : if map is a city
+	'progress_bar' => 1  # check: if char in doing a progress bar
 );
 
 our %amMulti = (

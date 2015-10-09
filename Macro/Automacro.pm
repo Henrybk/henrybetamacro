@@ -652,6 +652,7 @@ sub checkActor {
 			next;
 		}
 		next if ($not eq 'except' || $not eq 'none');
+		next if ($actorType eq 'npc' && $actor->{statuses}->{EFFECTSTATE_BURROW});#Won't trigger on perfect invisible npcs
 		my $val = sprintf("%d %d %s", $actor->{pos_to}{x}, $actor->{pos_to}{y}, $field->baseName);
 		if ($actorType eq 'npc') {
 			$varStack{".lastNpcName"} = $actor->name;
@@ -765,6 +766,15 @@ sub checkCity {
 	}
 }
 
+sub checkProgressBar {
+	my ($ourStatus, $wantedStatus) = @_;
+	if ($ourStatus == $wantedStatus) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -862,6 +872,7 @@ sub automacroCheck {
 		next CHKAM if (defined $automacro{$am}->{class}  && !checkClass($automacro{$am}->{class}));
 		next CHKAM if (defined $automacro{$am}->{whenGround} && !checkGround($automacro{$am}->{whenGround}));
 		next CHKAM if (defined $automacro{$am}->{incity} && !checkCity($automacro{$am}->{incity}));
+		next CHKAM if (defined $automacro{$am}->{progress_bar} && !checkProgressBar($char->{progress_bar} || 0, $automacro{$am}->{progress_bar}));
 		
 		foreach my $i (@{$automacro{$am}->{eval}})		 {next CHKAM unless checkEval($i)}
 		foreach my $i (@{$automacro{$am}->{action}})	 {next CHKAM unless checkAction($i)}
