@@ -197,7 +197,11 @@ sub checkClass {
 		if (exists $varStack{$var}) {$class = $varStack{$var}}
 		else {return 0}
 	}
-	return lc($class) eq lc($::jobs_lut{$char->{jobID}})?1:0
+	if ($class =~ /^\d+$/) {
+		return $class == $char->{jobID}?1:0
+	} else {
+		return lc($class) eq lc($::jobs_lut{$char->{jobID}})?1:0
+	}
 }
 
 # checks for HP/SP/Weight ##################################
@@ -340,18 +344,28 @@ sub checkEquip {
 	}
 
 	my $arg = $_[0];
-
 	if ($arg =~ m/^((?:top|mid|low)Head|(?:left|right)Hand|robe|armor|shoes|(?:left|right)Accessory|arrow)\s+(.*)/i) {
+		my $match = $2;
 		if (my $item = $char->{equipment}{$1}) {
-			return lc($2) eq lc($item->name)?1:0
+			if ($match =~ /^\d+$/) {
+				return $match == $item->{nameID}?1:0
+			} else {
+				return lc($match) eq lc($item->name)?1:0
+			}
 		}
-		return lc($2) eq 'none'?1:0
+		return lc($match) eq 'none'?1:0
 	}
-
-	$arg = lc($arg);
-	foreach my $s (keys %{$char->{equipment}}) {
-		next unless lc($char->{equipment}{$s}->name) eq $arg;
-		return 1
+	if ($arg =~ /^\d+$/) {
+		foreach my $s (keys %{$char->{equipment}}) {
+			next unless $char->{equipment}{$s}->nameID == $arg;
+			return 1
+		}
+	} else {
+		$arg = lc($arg);
+		foreach my $s (keys %{$char->{equipment}}) {
+			next unless lc($char->{equipment}{$s}->name) eq $arg;
+			return 1
+		}
 	}
 	return 0
 }
@@ -569,6 +583,7 @@ sub checkQuest {
         my @MobIds = keys %{($questList->{$questID})->{missions}};
         return 0 if ($::questList->{$questID}->{'active'} != 1);
         foreach my $MobId (@MobIds) {
+			return 0 if (!$::questList->{$questID}->{missions}->{$MobId}->{goal});#On some servers we receive the packet that tells us the goal until we kill at least one mob
             return 0 unless ($::questList->{$questID}->{missions}->{$MobId}->{count} == $::questList->{$questID}->{missions}->{$MobId}->{goal});
         }
         return 1;
@@ -775,6 +790,19 @@ sub checkProgressBar {
 	}
 }
 
+sub checkSkillLevel {
+	my ($handle, $cond, $amount) = getArgs($_[0]);
+	my $skillLevel = $char->getSkillLevel(new Skill(handle => $handle));
+	my $return = cmpr($skillLevel, $cond, $amount)?1:0;
+	if ($return) {
+		$varStack{".lastSkillLevel"} = $skillLevel;
+		return 1;
+	} else {
+		$varStack{".lastSkillLevel"} = undef;
+		return 0;
+	}
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -900,6 +928,7 @@ sub automacroCheck {
 		foreach my $i (@{$automacro{$am}->{storage}})    {next CHKAM unless checkItem("stor", $i)}
 		foreach my $i (@{$automacro{$am}->{shop}})       {next CHKAM unless checkItem("shop", $i)}
 		foreach my $i (@{$automacro{$am}->{cart}})       {next CHKAM unless checkItem("cart", $i)}
+		foreach my $i (@{$automacro{$am}->{skilllvl}})   {next CHKAM unless checkSkillLevel($i)}
 
 		message "[macro] automacro $am triggered.\n", "macro";
 

@@ -71,7 +71,8 @@ our %amMulti = (
 	'config' => 1,    	 # check: config key
 	'quest' => 1,     	 # check: player quests
 	'actor' => 1,        # check: actor near
-	'action' => 1     	 # check: action
+	'action' => 1,     	 # check: action
+	'skilllvl' => 1,     # check: level of a skill
 );
 
 our $macroKeywords =
