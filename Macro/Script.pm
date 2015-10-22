@@ -570,6 +570,7 @@ sub next {
 	} elsif ($line =~ /^call\s+/) {
 		my ($tmp) = $line =~ /^call\s+(.*)/;
 		my $name = $tmp;
+		if ($name =~ /^\$/) { parseCmd($name, $self); }
 		my $args;
 		my $cparms;
 		

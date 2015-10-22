@@ -342,31 +342,36 @@ sub checkEquip {
 		foreach my $e (@equip) {return 1 if checkEquip($e)}
 		return 0
 	}
-
+	my $not;
 	my $arg = $_[0];
-	if ($arg =~ m/^((?:top|mid|low)Head|(?:left|right)Hand|robe|armor|shoes|(?:left|right)Accessory|arrow)\s+(.*)/i) {
-		my $match = $2;
+	if ($arg =~ m/^((?:top|mid|low)Head|(?:left|right)Hand|robe|armor|shoes|(?:left|right)Accessory|arrow)\s+((not)\s+)?(.*)/i) {
+		my $match = $4;
+		$not = $3?1:0;
 		if (my $item = $char->{equipment}{$1}) {
 			if ($match =~ /^\d+$/) {
-				return $match == $item->{nameID}?1:0
+				return ($match == $item->{nameID} xor $not)?1:0
 			} else {
-				return lc($match) eq lc($item->name)?1:0
+				return (lc($match) eq lc($item->name) xor $not)?1:0
 			}
 		}
-		return lc($match) eq 'none'?1:0
+		return (lc($match) eq 'none' xor $not)?1:0
 	}
+	if ($arg =~ /^(not)\s+(.*)$/) { $not = $1; $arg = $2; }
 	if ($arg =~ /^\d+$/) {
 		foreach my $s (keys %{$char->{equipment}}) {
 			next unless $char->{equipment}{$s}->nameID == $arg;
+			return 0 if ($not);
 			return 1
 		}
 	} else {
 		$arg = lc($arg);
 		foreach my $s (keys %{$char->{equipment}}) {
 			next unless lc($char->{equipment}{$s}->name) eq $arg;
+			return 0 if ($not);
 			return 1
 		}
 	}
+	return 1 if ($not);
 	return 0
 }
 
@@ -549,18 +554,18 @@ sub checkConfigKey {
 		foreach my $e (@key) {return 1 if checkConfigKey($e)}
 		return 0
 	}
-	if ($args =~ /^(\S+) not (.*)$/) {
-		if ($config{$1} ne $2 || ($config{$1} && $2 eq 'none')) {
-			return 1;
-		} else {
-			return 0;
+	
+	if ($args =~ /^(\S+)\s+((not)\s+)?(.*)$/) {
+		my $key = $1;
+		my $not = $3;
+		my $value = $4;
+		if ($value =~ /^\$/) {
+			my ($var) = $value =~ /^\$([a-zA-Z][a-zA-Z\d]*)\s*$/;
+			return 0 unless defined $var;
+			return 0 unless exists $varStack{$var};
+			$value = $varStack{$var};
 		}
-	} elsif ($args =~ /^(\S+) (.*)$/) {		
-		if ($config{$1} eq $2 || (!$config{$1} && $2 eq 'none')) {
-			return 1;
-		} else {
-			return 0;
-		}
+		return 1 if (($config{$key} eq $value || (!$config{$key} && $value eq 'none')) xor $not);
 	}
 	return 0;
 }
@@ -583,7 +588,7 @@ sub checkQuest {
         my @MobIds = keys %{($questList->{$questID})->{missions}};
         return 0 if ($::questList->{$questID}->{'active'} != 1);
         foreach my $MobId (@MobIds) {
-			return 0 if (!$::questList->{$questID}->{missions}->{$MobId}->{goal});#On some servers we receive the packet that tells us the goal until we kill at least one mob
+			return 0 if (!$::questList->{$questID}->{missions}->{$MobId}->{goal});#On some servers we do not receive the packet that tells us the goal until we kill at least one mob
             return 0 unless ($::questList->{$questID}->{missions}->{$MobId}->{count} == $::questList->{$questID}->{missions}->{$MobId}->{goal});
         }
         return 1;
@@ -813,7 +818,6 @@ sub automacroCheck {
 	return if (defined $queue && !$queue->interruptible);
 
 	refreshGlobal();
-
 	CHKAM:
 	foreach my $am (sort {
 		($automacro{$a}->{priority} or 0) <=> ($automacro{$b}->{priority} or 0)
@@ -821,8 +825,15 @@ sub automacroCheck {
 		next CHKAM if $automacro{$am}->{disabled};
 
 		if (defined $automacro{$am}->{call} && !defined $macro{$automacro{$am}->{call}}) {
-			error "automacro $am: macro ".$automacro{$am}->{call}." not found.\n";
-			$automacro{$am}->{disabled} = 1; return
+			if ($automacro{$am}->{call} =~ /^\$/) {
+				my ($varMacroName) = $automacro{$am}->{call} =~ /^\$([a-zA-Z][a-zA-Z\d]*)\s*$/;
+				next CHKAM unless defined $varMacroName;
+				next CHKAM unless exists $varStack{$varMacroName};
+				next CHKAM unless defined $macro{$varStack{$varMacroName}};
+			} else {
+				error "automacro $am: macro ".$automacro{$am}->{call}." not found.\n";
+				$automacro{$am}->{disabled} = 1; return
+			}
 		}
 		
 		if (defined $automacro{$am}->{recheck}) {
@@ -946,7 +957,12 @@ sub automacroCheck {
 
 		if (defined $automacro{$am}->{call}) {
 			undef $queue if defined $queue;
-			$queue = new Macro::Script($automacro{$am}->{call});
+			if ($automacro{$am}->{call} =~ /^\$/) {
+				my ($callVar) = $automacro{$am}->{call} =~ /^\$([a-zA-Z][a-zA-Z\d]*)\s*$/;
+				$queue = new Macro::Script($varStack{$callVar});
+			} else {
+				$queue = new Macro::Script($automacro{$am}->{call});
+			}
 			if (defined $queue) {
 				$queue->overrideAI(1) if $automacro{$am}->{overrideAI};
 				$queue->interruptible(0) if $automacro{$am}->{exclusive};
