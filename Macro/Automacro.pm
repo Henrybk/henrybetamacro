@@ -293,8 +293,13 @@ sub checkItem {
 		else {return 0}
 	}
 	if ($item =~ /^(\d+)$/) {
-		$item = $char->inventory->getByNameID($1);
-		$item = $item->{name};
+		if (exists $items_lut{$item}) {
+			if ($itemSlotCount_lut{$item}) {
+				$item = $items_lut{$item}." [".$itemSlotCount_lut{$item}."]";
+			} else {
+				$item = $items_lut{$item};
+			}
+		}
 	}
 	if ($amount =~ /^\$/) {
 		my ($var1) = $amount =~ /^\$([a-zA-Z][a-zA-Z\d]*)\s*/;
