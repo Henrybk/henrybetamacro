@@ -813,6 +813,45 @@ sub checkSkillLevel {
 	}
 }
 
+sub checkPlugin {
+	my ($args) = @_;
+	my ($wantedStatus, $pluginName);
+	if ($args =~ /(on|off)\s+(.+)/) {
+		$wantedStatus = ($1 eq 'on') ? 1 : 0;
+		$pluginName = $2;
+	} else {
+		return 0;
+	}
+	
+	foreach my $plugin (@Plugins::plugins) {
+		next unless $plugin;
+		if ($plugin->{name} =~ /$pluginName/i) {
+			return 1 if ($wantedStatus);
+		}
+	}
+	
+	return 0 if ($wantedStatus);
+	
+	return 1;
+}
+
+sub checkLoggedChar {
+	my ($slot) = @_;
+	return 0 if ($slot !~ /\d+/);
+	
+	my $charCounter = 0;
+	foreach (@chars) {
+		next unless (defined $_);
+		if ($_->{name} eq $char->{name}) {
+			return 1 if ($charCounter == $slot);
+			return 0;
+		}
+	} continue {
+		$charCounter++;
+	}
+	return 0;
+}
+
 # parses automacros and checks conditions #################
 sub automacroCheck {
 	my ($trigger, $args) = @_;
@@ -945,6 +984,8 @@ sub automacroCheck {
 		foreach my $i (@{$automacro{$am}->{shop}})       {next CHKAM unless checkItem("shop", $i)}
 		foreach my $i (@{$automacro{$am}->{cart}})       {next CHKAM unless checkItem("cart", $i)}
 		foreach my $i (@{$automacro{$am}->{skilllvl}})   {next CHKAM unless checkSkillLevel($i)}
+		foreach my $i (@{$automacro{$am}->{plugin}})     {next CHKAM unless checkPlugin($i)}
+		foreach my $i (@{$automacro{$am}->{loggedchar}}) {next CHKAM unless checkLoggedChar($i)}
 
 		message "[macro] automacro $am triggered.\n", "macro";
 
